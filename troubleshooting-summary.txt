@@ -1,0 +1,69 @@
+AWS CUSTOMER SUPPORT AGENT — TROUBLESHOOTING SUMMARY
+
+1. Entrypoint not found
+   Error: AgentCore could not find main.py.
+   Cause: The terminal was in the parent directory.
+   Fix: Changed into ai_suport_agent before running AgentCore commands.
+
+2. Docker installed, but AgentCore reported no container engine
+   Cause: The deployment configuration still had container_runtime: none.
+   Fix: Set it to docker and verified detection with AgentCore's runtime check.
+
+3. PowerShell invocation failures
+   Errors: uuidgen was not recognized; missing payload; incorrect JSON quoting.
+   Cause: Bash syntax was being used in PowerShell.
+   Fix: Used [guid]::NewGuid(), PowerShell's --% syntax, escaped JSON quotes,
+   and single-line commands without Bash continuation characters.
+
+4. Runtime returned HTTP 500 when accessing memory
+   Cause: The execution role lacked GetMemory permission for the memory
+   resource referenced in main.py, which differed from the toolkit's memory.
+   Fix: Added GetMemory, RetrieveMemoryRecords, and CreateEvent permissions
+   scoped to the memory resource the application actually used.
+
+5. Knowledge-base retrieval failed
+   Symptom: The agent supplied generic loyalty benefits after a tool failure.
+   Cause: CloudWatch showed AccessDeniedException for bedrock:Retrieve.
+   Fix: Granted the runtime role access to the specific knowledge base.
+   A subsequent invocation returned the catalog's Platinum benefits.
+
+6. Difficulty retrieving diagnostic logs
+   Problems: The diagnostic terminal used a different AWS account, and the
+   Windows CLI could not print Unicode characters from CloudWatch logs.
+   Fix: Retrieved logs from the deployment account and configured UTF-8
+   output. Used exception details rather than the agent's error summary.
+
+7. Browser access denied
+   Cause: The runtime role lacked StartBrowserSession permission.
+   Fix: Added permissions to start, access, connect to, and stop sessions
+   for the built-in AgentCore Browser resource.
+
+8. Browser use caused asynchronous runtime failures
+   Errors: "Timeout should be used inside a task" and
+   "cannot create weak reference to 'NoneType' object".
+   Investigation: The browser tool applied nest_asyncio under Python 3.14.
+   Fix: Pinned the project and container to Python 3.13, updated uv.lock,
+   passed a local compatibility check, and rebuilt the deployment.
+
+9. Browser session name rejected
+   Cause: The installed tool required a 10–36 character name containing
+   lowercase letters, digits, or hyphens. This is separate from session_id.
+   Fix: Explicitly requested the browser session name udacity-browser-test.
+   The successful test returned Udacity's actual page title.
+
+10. Reviewer requested Gateway failure handling
+    Problem: Gateway connection and tool-loading exceptions could escape
+    without a meaningful customer response.
+    Fix: Added a basic try/except covering connection setup and agent use,
+    explicit timeout/connection/general handlers, success and exception
+    logging, and a customer-facing service-unavailable message.
+    The revised project passed review.
+
+11. VS Code save conflict
+    Cause: Unsaved editor changes differed from changes saved on disk.
+    Fix: Compared versions and saved the intended error-handling changes.
+
+KEY LESSON
+Trace failures across the full path: terminal -> deployment configuration ->
+runtime role -> AWS service -> tool result -> agent response. A fluent answer
+does not prove a tool succeeded; verify results and inspect the actual logs.
