@@ -39,6 +39,7 @@ from strands_tools.browser import AgentCoreBrowser
 
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger("CSAI_Agent")
+logger.setLevel(logging.INFO)
 
 # ── TODO 1 — App Initialisation ───────────────────────────────────────────────
 # Create a BedrockAgentCoreApp instance.
@@ -511,32 +512,40 @@ async def invoke(payload, context=None):
         browser.browser,
     ]
 
-    print("3 - before gateway")
+    try:
+        mcp_client = MCPClient(lambda: streamable_http_client(GATEWAY_URL))
+        with mcp_client:
+            gateway_tools = mcp_client.list_tools_sync()
+            tools.extend(gateway_tools)
+            logger.info(
+                "Gateway connected successfully. Loaded %d tools.",
+                len(gateway_tools),
+            )
 
-    mcp_client = MCPClient(
-        lambda: streamable_http_client(GATEWAY_URL)
-    )
-
-    with mcp_client:
-        gateway_tools = mcp_client.list_tools_sync()
-        print("4 - gateway works")
-        tools.extend(gateway_tools)
-
-        agent = Agent(
-            model=model,
-            tools=tools,
-            hooks=[memory_hook],
-            system_prompt=(
-                "You are a helpful customer support assistant "
-                "for an e-commerce platform. "
-                "Use the available tools when needed."
-            ),
-        )
-
-        print("5 - before model")
-        response = agent(user_input)
-        print("6 - model works")
-    return response.message["content"][0]["text"]
+            agent = Agent(
+                model=model,
+                tools=tools,
+                hooks=[memory_hook],
+                system_prompt=(
+                    "You are a helpful customer support assistant "
+                    "for an e-commerce platform. "
+                    "Use the available tools when needed."
+                ),
+            )
+            response = agent(user_input)
+            return response.message["content"][0]["text"]
+    except TimeoutError:
+        logger.exception("Gateway request timed out")
+        return "The support service is unavailable. Please contact customer support."
+        
+    except ConnectionError:
+        logger.exception("Gateway connection failed")
+        return "The support service is unavailable. Please contact customer support."
+        
+    except Exception as exc:
+        logger.exception("Gateway tool loeading failed: %s", exc)
+        return "The support service is unavailable. Please contact customer support."
+        
 
 
 # ── CLI entry point (do not modify) ──────────────────────────────────────────
